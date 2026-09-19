@@ -82,9 +82,11 @@ def main() -> int:
     t0 = time.time()
     r2 = pipe.ingest(str(corpus))
     t_re = time.time() - t0
-    ok_ingest = r1.chunks > 0 and r2.chunks == 0
-    print(f"摄取: 首次新增块={r1.chunks} 文件={r1.added} 耗时={t_ingest:.2f}s")
-    print(f"幂等: 二次新增块={r2.chunks}（必须为 0）耗时={t_re:.2f}s")
+    total = pipe.store.stats()["chunks"]
+    # 语料已存在时首次新增为 0（幂等跳过），这同样是通过条件
+    ok_ingest = (r1.chunks > 0 or r1.skipped > 0) and r2.chunks == 0 and total > 0
+    print(f"摄取: 首次新增块={r1.chunks} 跳过={r1.skipped} 文件={r1.added} 耗时={t_ingest:.2f}s")
+    print(f"幂等: 二次新增块={r2.chunks}（必须为 0）耗时={t_re:.2f}s 库内块数={total}")
     print("-" * 70)
 
     fails = 0

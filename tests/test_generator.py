@@ -35,3 +35,12 @@ def test_context_block_contains_numbered_sources():
     ctx = _ctx()
     block = AnswerGenerator.build_context(ctx)
     assert "[1]" in block and "[2]" in block
+
+
+def test_messages_end_with_assistant_prefill():
+    """预填充是让思考型模型直接给结论的关键，不能被后续改动悄悄删掉。"""
+    from starlight.config import PROFILES
+    gen = AnswerGenerator(provider=None, profile=PROFILES["balanced"])
+    msgs = gen.build_messages("报销几号提交？", _ctx())
+    assert msgs[-1]["role"] == "assistant"
+    assert msgs[-1]["content"] == "答案："

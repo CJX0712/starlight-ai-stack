@@ -58,6 +58,10 @@ class AnswerGenerator:
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"【参考资料】\n{material}\n\n【问题】\n{query}"},
+            # 助手预填充：把「答案：」先写进对话，模型只能从这里续写。
+            # 实测（qwen3:4b，本机）：同一问题从 29.3s 的思考废话变成 1.7s 的直接答案，
+            # 且不再把 token 预算烧在推理过程上导致答案被截断。
+            {"role": "assistant", "content": ANSWER_MARK},
         ]
 
     def options(self, max_tokens: int | None = None) -> dict[str, Any]:
@@ -93,20 +97,10 @@ class AnswerGenerator:
         if isinstance(gen, dict):  # 后端不支持流式的兜底
             yield self.strip_preamble(gen.get("content") or "")
             return
-        buf = ""
-        started = False
+        # 已有预填充，模型是从「答案：」之后开始续写的，直接下发即可，
+        # 再缓冲等标记只会白白增加首字延迟。
         for piece in gen:
-            if started:
-                yield piece
-                continue
-            buf += piece
-            idx = buf.find(ANSWER_MARK)
-            if _is_head_mark(idx):
-                started = True
-                yield buf[idx + len(ANSWER_MARK):]
-            elif len(buf) > 400:
-                started = True
-                yield buf
+            yield piece
 
     @staticmethod
     def strip_preamble(text: str) -> str:
