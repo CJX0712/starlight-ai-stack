@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starlight-ai-stack"
+version = "1.0.0"
+description = "本地优先的检索增强生成系统：摄取 / 混合检索 / 引用生成 全链路可独立验证"
+authors = [{ name = "晨星" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.53.0",
+    "httpx==0.28.1",
+    "pydantic==2.13.5",
+    "numpy==2.5.3",
+    "sqlite-vec==0.1.9",
+    "pypdf==6.19.0",
+    "openai==3.16.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

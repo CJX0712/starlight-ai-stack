@@ -1,0 +1,19 @@
+# Starlight AI Stack 运行时依赖（版本锁定）
+# 作者: 晨星
+#
+# 安装约定：本机无 C/C++ 编译器，全部依赖只装预编译 wheel
+#   pip install --only-binary=:all: -r requirements.txt
+#
+# 版本号来自本机实测安装结果，改动前请跑 python -m starlight.selftest
+
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+httpx==0.28.1
+pydantic==2.13.5
+numpy==2.5.3
+sqlite-vec==0.1.9
+pypdf==6.19.0
+openai==3.16.2
+
+# 测试
+pytest==9.1.1
