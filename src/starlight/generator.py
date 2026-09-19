@@ -22,6 +22,8 @@ SYSTEM_PROMPT = (
     "2. 若资料不足以回答，直接说明资料中没有相关信息，不要猜测。\n"
     "3. 用简体中文回答，条理清晰，不超过 300 字。\n"
     "4. 输出必须以「答案：」这四个字开头，其后直接写结论，不要写分析过程或开场白。\n"
+    "5. 不得补充资料中未出现的信息，包括擅自展开缩写、补充定义或举例。\n"
+    "   资料里出现缩写就照原样使用（例如资料写 RRF 就写 RRF），不要自行解释成全称。\n"
 )
 
 ANSWER_MARK = "答案："
@@ -36,6 +38,9 @@ def _is_head_mark(idx: int) -> bool:
     return 0 <= idx <= 1
 
 _CITE = re.compile(r"\[(\d+)\]")
+
+# 缩写 + 括号展开，例如 RRF（Reciprocal Rank Fusion）
+_ACRONYM_EXPANSION = re.compile(r"\b([A-Z]{2,8})[（(]([A-Za-z][^）)]{1,80})[）)]")
 
 
 class AnswerGenerator:
@@ -77,7 +82,7 @@ class AnswerGenerator:
         messages = self.build_messages(query, context)
         result = self.provider.chat(messages, model=self.profile.llm, options=self.options(max_tokens))
         raw = (result.get("content") or "").strip() if isinstance(result, dict) else str(result)
-        text = self.strip_preamble(raw)
+        text = self.enforce_grounding(self.strip_preamble(raw), context)
         return Answer(
             text=text,
             citations=self.parse_citations(text, context),
@@ -116,6 +121,30 @@ class AnswerGenerator:
             if len(body) >= 8:
                 return body
         return t
+
+    @staticmethod
+    def enforce_grounding(text: str, context: list[ScoredChunk]) -> str:
+        """剔除资料中无依据的缩写展开。
+
+        实测踩坑：资料只写「RRF 融合排序」，qwen2.5:7B 自行补成
+        「RRF（Relevance Function Fusion）」——括号里的全称是编造的。
+        提示词约束对它无效，所以这里做确定性校验：把括号展开的每个英文词
+        拿去资料里核对，核对不上就整段删掉，只留缩写本身。
+        """
+        material = " ".join(sc.chunk.text for sc in context).lower()
+        if not material:
+            return text
+
+        def repl(m: re.Match) -> str:
+            acronym, inner = m.group(1), m.group(2)
+            if acronym.lower() not in material:
+                return m.group(0)  # 缩写本身就不是资料里的，不处理
+            words = re.findall(r"[A-Za-z]{2,}", inner)
+            if words and all(w.lower() in material for w in words):
+                return m.group(0)  # 展开能在资料里找到依据，保留
+            return acronym
+
+        return _ACRONYM_EXPANSION.sub(repl, text)
 
     @staticmethod
     def parse_citations(text: str, context: list[ScoredChunk]) -> list[Citation]:

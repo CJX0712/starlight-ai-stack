@@ -146,8 +146,10 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         for piece in gen:
             buf += piece
             yield f"data: {json.dumps({'type': 'delta', 'text': piece}, ensure_ascii=False)}\n\n"
-        citations = AnswerGenerator.parse_citations(buf, ctx)
-        tail = {"type": "done", "citations": [c.__dict__ for c in citations], "text": buf}
+        # 流式过程中无法回改已下发的片段，因此在收尾时做一次落地校验与引用解析
+        final = AnswerGenerator.enforce_grounding(buf, ctx)
+        citations = AnswerGenerator.parse_citations(final, ctx)
+        tail = {"type": "done", "citations": [c.__dict__ for c in citations], "text": final}
         yield f"data: {json.dumps(tail, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")

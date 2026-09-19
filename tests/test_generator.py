@@ -44,3 +44,24 @@ def test_messages_end_with_assistant_prefill():
     msgs = gen.build_messages("报销几号提交？", _ctx())
     assert msgs[-1]["role"] == "assistant"
     assert msgs[-1]["content"] == "答案："
+
+
+def test_grounding_guard_removes_invented_expansion():
+    """资料里只有 RRF，模型自行补的全称必须被剔除。"""
+    ctx = [ScoredChunk(
+        chunk=Chunk(id="b#0", doc_id="b", seq=0, text="两路结果通过 RRF 融合排序，避免单一路召回失手。",
+                    meta={"source": "doc"}), score=0.9)]
+    answer = "两路结果通过 RRF（Relevance Function Fusion）融合排序。[1]"
+    fixed = AnswerGenerator.enforce_grounding(answer, ctx)
+    assert "Relevance Function Fusion" not in fixed
+    assert "RRF" in fixed
+
+
+def test_grounding_guard_keeps_supported_expansion():
+    """展开在资料里有依据时保留原样。"""
+    ctx = [ScoredChunk(
+        chunk=Chunk(id="c#0", doc_id="c", seq=0,
+                    text="RRF（Reciprocal Rank Fusion）是一种融合排序方法。", meta={"source": "doc"}),
+        score=0.9)]
+    answer = "RRF（Reciprocal Rank Fusion）用于融合排序。[1]"
+    assert AnswerGenerator.enforce_grounding(answer, ctx) == answer

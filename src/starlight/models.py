@@ -53,6 +53,18 @@ class OllamaProvider:
             m["name"]: list(m.get("capabilities") or []) for m in r.json().get("models", [])
         }
 
+    def loaded_models(self) -> list[str]:
+        """当前已常驻内存的模型（/api/ps）。
+
+        用途：模型已加载时可用内存天然会变低，内存守卫不能据此误判为"内存不足"。
+        """
+        try:
+            r = self._client.get("/api/ps")
+            r.raise_for_status()
+            return [m.get("name", "") for m in r.json().get("models", [])]
+        except Exception:
+            return []
+
     def embed(self, texts: list[str], *, model: str) -> list[list[float]]:
         r = self._client.post("/api/embed", json={"model": model, "input": texts})
         r.raise_for_status()

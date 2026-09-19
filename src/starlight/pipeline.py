@@ -46,7 +46,8 @@ class RAGPipeline:
             info = {}
         if not info:
             return self.settings.model, ["模型服务不可达，未做模型降级解析"]
-        return resolve_profile(info, self.settings.model)
+        loaded = getattr(self.provider, "loaded_models", lambda: [])()
+        return resolve_profile(info, self.settings.model, loaded_models=loaded)
 
     def prepare(self) -> None:
         """确保向量表维度与当前嵌入模型一致；不一致则原地重建（原文不丢）。"""

@@ -63,7 +63,8 @@ def _resolved(settings: Settings | None = None) -> tuple[Settings, object, list[
         info = {}
     if not info:
         return s, s.model, ["模型服务不可达"]
-    profile, notes = resolve_profile(info, s.model)
+    loaded = getattr(p, "loaded_models", lambda: [])()
+    profile, notes = resolve_profile(info, s.model, loaded_models=loaded)
     return s, profile, notes
 
 

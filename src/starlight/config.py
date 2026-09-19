@@ -95,17 +95,24 @@ def free_memory_gb() -> float:
         return -1.0
 
 
-# 高配档所需的最小可用内存：7B Q4 权重约 4.7GB，低于此值会疯狂换页
-HIGH_MIN_FREE_GB = 4.0
+# 高配档所需的最小可用内存。
+# 4.7GB 权重本身走 mmap，实测在可用内存 3.9GB 时仍能以 2.92 tok/s 稳定出答案；
+# 留 1GB 余量把阈值定在 3.0GB。再低就会开始明显换页，宁可降级。
+HIGH_MIN_FREE_GB = 3.0
 
 
 def resolve_profile(
-    models_info: dict[str, list[str]], profile: ModelProfile
+    models_info: dict[str, list[str]],
+    profile: ModelProfile,
+    loaded_models: list[str] | None = None,
 ) -> tuple[ModelProfile, list[str]]:
     """按本机实际可用模型修正档位，返回（生效档位，调整说明）。
 
     存在意义：配置里写的模型可能没拉下来（网络慢、磁盘不够、换机器），
     与其让整条链路崩掉，不如自动降级到可用模型并把原因讲清楚。
+
+    loaded_models：已经常驻显存/内存的模型。已在内存里的模型不再重复占用，
+    所以此时可用内存偏低属于正常现象，不能据此判为内存不足。
     """
     notes: list[str] = []
     available = set(models_info)
@@ -127,13 +134,18 @@ def resolve_profile(
     llm = pick(profile.llm, LLM_FALLBACKS, "completion")
     embed = pick(profile.embed, EMBED_FALLBACKS, "embedding")
 
-    # 内存守卫：模型存在但内存不够时同样要降级，否则整机换页卡死
+    # 内存守卫：模型存在但内存不够时同样要降级，否则整机换页卡死。
+    # 例外：该模型已常驻内存（无需再加载），此时低可用内存是结果而非风险。
+    resident = {m.split(":")[0] for m in (loaded_models or [])}
+    already_loaded = profile.llm in (loaded_models or []) or profile.llm.split(":")[0] in resident
     free = free_memory_gb()
-    if profile.name == "high" and 0 < free < HIGH_MIN_FREE_GB:
+    if profile.name == "high" and not already_loaded and 0 < free < HIGH_MIN_FREE_GB:
         notes.append(f"可用内存 {free:.1f}GB 低于高配档下限 {HIGH_MIN_FREE_GB}GB，降级为 balanced")
         profile = PROFILES["balanced"]
         llm = pick(profile.llm, LLM_FALLBACKS, "completion")
         embed = pick(profile.embed, EMBED_FALLBACKS, "embedding")
+    elif profile.name == "high" and already_loaded and 0 < free < HIGH_MIN_FREE_GB:
+        notes.append(f"{profile.llm} 已常驻内存（可用 {free:.1f}GB），不再按内存阈值降级")
 
     if llm == profile.llm and embed == profile.embed:
         return profile, notes
