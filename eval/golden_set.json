@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "author": "晨星",
+  "description": "检索与生成的验收金标集。keywords 全部命中才计为该条通过，保证不是靠碰运气。",
+  "thresholds": {
+    "ctx_hit": 0.9,
+    "top1_hit": 0.6,
+    "mrr": 0.7,
+    "answer_hit": 0.7,
+    "citation_valid": 1.0
+  },
+  "cases": [
+    {"id": "q01", "question": "报销需要在几号前提交？", "keywords": ["25 日"], "source": "01-报销制度.txt"},
+    {"id": "q02", "question": "财务多久完成打款？", "keywords": ["3 个工作日"], "source": "01-报销制度.txt"},
+    {"id": "q03", "question": "差旅报销要额外附什么？", "keywords": ["出差申请单"], "source": "01-报销制度.txt"},
+    {"id": "q04", "question": "健康检查接口是哪个？", "keywords": ["/health"], "source": "02-运维手册.txt"},
+    {"id": "q05", "question": "日志文件存放在哪个目录？", "keywords": ["/var/log/starlight"], "source": "02-运维手册.txt"},
+    {"id": "q06", "question": "混合检索用了哪两种检索方式？", "keywords": ["BM25", "向量"], "source": "03-向量检索说明.txt"},
+    {"id": "q07", "question": "两路检索结果是怎么融合的？", "keywords": ["RRF"], "source": "03-向量检索说明.txt"},
+    {"id": "q08", "question": "中文是怎么分词的？", "keywords": ["二字组"], "source": "03-向量检索说明.txt"},
+    {"id": "q09", "question": "入职当天需要做什么？", "keywords": ["工牌"], "source": "04-入职流程.txt"},
+    {"id": "q10", "question": "客户数据可以外发吗？", "keywords": ["不得外发"], "source": "05-数据安全规范.txt"}
+  ]
+}

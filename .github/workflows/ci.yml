@@ -1,0 +1,77 @@
+# Starlight AI Stack CI
+# 作者: 晨星
+#
+# 两个任务：
+#   unit       每次 push 都跑，只依赖预编译 wheel，不需要模型服务，秒级完成
+#   eval-gate  手动触发（workflow_dispatch），会拉起 Ollama 并跑真实评测门禁，
+#              指标不达标则任务失败。放在手动触发是因为它要下载 ~1.5GB 模型，
+#              不适合挂在每次提交上，但需要时可一键复现。
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "评测使用的档位（小模型档更适合 CI）"
+        default: lite
+        type: choice
+        options: [lite, balanced, high]
+
+jobs:
+  unit:
+    name: 单元测试（无需模型）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 安装依赖（仅预编译 wheel）
+        run: pip install --only-binary=:all: -r requirements.txt
+      - name: 运行单元测试
+        run: python -m pytest -q
+
+  eval-gate:
+    name: 评测门禁（需要模型服务）
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      STARLIGHT_PROFILE: ${{ inputs.profile }}
+      STARLIGHT_HOME: ${{ github.workspace }}/data/eval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 安装 Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: 启动模型服务
+        run: |
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:11434/api/tags && break
+            sleep 2
+          done
+      - name: 拉取模型
+        run: |
+          case "$STARLIGHT_PROFILE" in
+            lite) MODELS="qwen3:4b nomic-embed-text" ;;
+            high) MODELS="qwen2.5:7b-instruct-q4_K_M bge-m3" ;;
+            *)    MODELS="qwen3:4b bge-m3" ;;
+          esac
+          for m in $MODELS; do ollama pull "$m"; done
+      - name: 安装依赖
+        run: pip install --only-binary=:all: -r requirements.txt
+      - name: 运行检索与生成评测
+        run: python scripts/eval.py --mode rag --json-out eval/report-rag.json
+      - name: 上传评测报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/report-rag.json
+          if-no-files-found: warn

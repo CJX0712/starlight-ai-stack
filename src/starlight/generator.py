@@ -118,7 +118,7 @@ class AnswerGenerator:
         idx = t.find(ANSWER_MARK)
         if _is_head_mark(idx):
             body = t[idx + len(ANSWER_MARK):].strip()
-            if len(body) >= 8:
+            if len(body) >= 2:  # 阈值放宽到 2 字：短答案（如"是"）也必须能剥离标记
                 return body
         return t
 

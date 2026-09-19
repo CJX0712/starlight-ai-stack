@@ -213,6 +213,51 @@ def check_generator() -> tuple[bool, list[str]]:
     return ok, log
 
 
+@register("agent")
+def check_agent() -> tuple[bool, list[str]]:
+    """Agent 层自检：工具离线部分 + 一次真实工具调用链路。"""
+    from .tools import ToolRegistry, ToolSpec, calculate
+
+    log: list[str] = []
+    # 离线：工具本身的可判定性质
+    calc_ok = calculate("2+3*4") == 14
+    log.append(f"计算器 2+3*4={calculate('2+3*4'):g}（离线判定，不依赖模型）")
+    reg = ToolRegistry(max_output=16)
+    reg.register(ToolSpec(name="echo", description="回显", parameters={}, handler=lambda a: "x" * 100))
+    unknown_ok = "未知工具" in _safe_call(reg, "nope")
+    trunc_ok = "已截断" in reg.call("echo", {})
+    log.append(f"未知工具兜底={unknown_ok} 输出截断={trunc_ok}（工具上限 {reg.max_output} 字）")
+
+    tmp = _tmpdir()
+    live_ok = False
+    try:
+        st = _fresh_settings(str(tmp))
+        pipe = RAGPipeline(st)
+        if not pipe.provider.health():
+            log.append("模型服务不可达，跳过 Agent 在线自检")
+            return calc_ok and unknown_ok and trunc_ok, log
+        pipe.prepare()
+        pipe.ingest_text("运维手册：服务健康检查接口为 /health，返回 200 表示进程存活。", "ops")
+        trace = pipe.run_agent("知识库里健康检查接口是哪个？", max_steps=3)
+        used = [s.tool for s in trace.steps]
+        log.append(f"工具调用序列={used}（应包含 knowledge_search）")
+        log.append(f"停止原因={trace.stopped_reason} 步数={len(trace.steps)}/3 耗时={trace.elapsed_s:.2f}s")
+        log.append(f"答案={trace.answer[:50]!r} 引用数={len(trace.citations)}")
+        live_ok = "knowledge_search" in used and bool(trace.answer.strip()) and len(trace.steps) <= 3
+        pipe.close()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return calc_ok and unknown_ok and trunc_ok and live_ok, log
+
+
+def _safe_call(reg, name: str) -> str:
+    try:
+        reg.call(name, {})
+        return ""
+    except Exception as exc:
+        return str(exc)
+
+
 @register("pipeline")
 def check_pipeline() -> tuple[bool, list[str]]:
     log: list[str] = []

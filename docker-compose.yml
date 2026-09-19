@@ -1,0 +1,81 @@
+# Starlight AI Stack 容器编排
+# 作者: 晨星
+#
+# 两个服务，职责分离：
+#   ollama        模型服务，模型权重放命名卷，重建应用容器不会丢模型
+#   starlight     API 网关 + 控制台，知识库放命名卷
+#
+# 首次启动：
+#   docker compose up -d
+#   docker compose run --rm model-bootstrap      # 拉取档位所需模型（幂等，可重复执行）
+#
+# 换档位：
+#   STARLIGHT_PROFILE=high docker compose up -d starlight
+
+services:
+  ollama:
+    image: ollama/ollama:0.34.0
+    container_name: starlight-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  starlight:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: starlight-ai-stack:1.0.0
+    container_name: starlight-api
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      STARLIGHT_PROFILE: ${STARLIGHT_PROFILE:-balanced}
+      STARLIGHT_OLLAMA_URL: http://ollama:11434
+      STARLIGHT_HOME: /data
+      STARLIGHT_TOP_K: ${STARLIGHT_TOP_K:-5}
+      STARLIGHT_API_PORT: "8787"
+    volumes:
+      - starlight-data:/data
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+
+  # 一次性任务：把当前档位需要的模型拉齐（重复执行是幂等的）
+  model-bootstrap:
+    image: ollama/ollama:0.34.0
+    container_name: starlight-model-bootstrap
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      STARLIGHT_PROFILE: ${STARLIGHT_PROFILE:-balanced}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        case "$$STARLIGHT_PROFILE" in
+          high) MODELS="qwen2.5:7b-instruct-q4_K_M bge-m3" ;;
+          lite) MODELS="qwen3:4b nomic-embed-text" ;;
+          *)    MODELS="qwen3:4b bge-m3" ;;
+        esac
+        for m in $$MODELS; do
+          echo "拉取模型: $$m"
+          ollama pull "$$m"
+        done
+        echo "模型就绪:"
+        ollama list
+    profiles: ["setup"]
+
+volumes:
+  ollama-models:
+  starlight-data:

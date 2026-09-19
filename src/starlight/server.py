@@ -59,6 +59,11 @@ class ChatRequest(BaseModel):
     stream: bool = False
 
 
+class AgentRequest(BaseModel):
+    goal: str = Field(..., description="交给智能体的目标，例如「知识库里报销要在几号前提交？」")
+    max_steps: int = Field(4, ge=1, le=8, description="工具调用轮数上限")
+
+
 class SearchResponseItem(BaseModel):
     chunk_id: str
     score: float
@@ -151,6 +156,41 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
         citations = AnswerGenerator.parse_citations(final, ctx)
         tail = {"type": "done", "citations": [c.__dict__ for c in citations], "text": final}
         yield f"data: {json.dumps(tail, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@app.get("/tools")
+def tools_list() -> dict[str, Any]:
+    """列出 Agent 可用的工具。"""
+    from .tools import build_default_tools
+
+    return {"tools": build_default_tools(get_pipeline()).describe()}
+
+
+@app.post("/agent")
+def agent_run(req: AgentRequest) -> dict[str, Any]:
+    """让智能体自主调工具完成任务，返回完整轨迹（含每步工具与观察结果）。"""
+    return get_pipeline().run_agent(req.goal, req.max_steps).to_dict()
+
+
+@app.post("/agent/stream")
+def agent_stream(req: AgentRequest) -> StreamingResponse:
+    """SSE：逐步推送工具调用事件，最后推送完整轨迹。"""
+    runtime = get_pipeline().build_agent(req.max_steps)
+
+    def events() -> Iterator[str]:
+        for ev in runtime.run_iter(req.goal):
+            if ev["type"] == "step":
+                s = ev["step"]
+                payload = {
+                    "type": "step", "index": s.index, "tool": s.tool, "args": s.args,
+                    "ok": s.ok, "elapsed_s": round(s.elapsed_s, 2),
+                    "observation": s.observation[:400],
+                }
+            else:
+                payload = {"type": "done", "trace": ev["trace"].to_dict()}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")
 

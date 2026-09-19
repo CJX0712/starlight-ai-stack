@@ -9,4 +9,5 @@ data/
 *.db
 *.db-wal
 *.db-shm
+eval/report-*.json
 .DS_Store

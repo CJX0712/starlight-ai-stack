@@ -82,7 +82,44 @@ from starlight.pipeline import RAGPipeline
 pipe = RAGPipeline(backend="openai")   # 配合 STARLIGHT_OLLAMA_URL 指向该端点
 ```
 
-## 6. 故障排查
+## 6. 容器化部署
+
+```bash
+docker compose up -d                          # 起 ollama + api
+docker compose run --rm model-bootstrap       # 拉齐当前档位所需模型（幂等）
+docker compose logs -f starlight              # 看服务日志
+```
+
+两个服务职责分离，各自用命名卷：`ollama-models` 存模型权重，`starlight-data` 存知识库。
+重建应用容器不会丢模型，删掉 starlight 容器也不会丢知识库。
+
+换档位：
+
+```bash
+STARLIGHT_PROFILE=high docker compose up -d starlight
+```
+
+只跑单元测试（不需要模型服务，适合 CI）：
+
+```bash
+docker run --rm -v "$PWD":/app -w /app python:3.13-slim \
+  sh -c "pip install --only-binary=:all: -r requirements.txt && python -m pytest -q"
+```
+
+## 7. 评测门禁
+
+```bash
+python scripts/eval.py --mode rag             # 检索+生成，10 条金标集
+python scripts/eval.py --mode agent           # 智能体路径
+python scripts/eval.py --profile balanced     # 换档位对比效果
+```
+
+退出码：0 通过 / 1 指标未达标 / 2 环境问题。阈值与用例在 `eval/golden_set.json` 中维护，
+语料放在 `eval/corpus/`。扩充语料后建议同步上调阈值。
+
+CI 中的 `eval-gate` 任务默认不跑（需下载约 1.5GB 模型），在 Actions 页面手动触发即可。
+
+## 8. 故障排查
 
 | 症状 | 原因 | 处理 |
 |---|---|---|
@@ -90,18 +127,22 @@ pipe = RAGPipeline(backend="openai")   # 配合 STARLIGHT_OLLAMA_URL 指向该�
 | 嵌入报 404 | 档位指定的嵌入模型本机没有 | 看 `/health` 的 `notes`，执行 `ollama pull <模型>` 或换档位 |
 | 建库 `PermissionError` | Windows 临时目录被安全软件占用 | 设 `STARLIGHT_HOME` 到项目目录下 |
 | 生成极慢（<1 tok/s） | 内存不足导致换页 | 换 `balanced` 档，或关闭占内存的容器后重启 |
+| 装依赖慢到以分钟计 | 大模型常驻内存后磁盘换页 | `ollama stop <模型>` 腾出内存再装 |
 | 答案前面一大段分析 | 用到了思考型模型（qwen3 系列） | 换 `qwen2.5` 系列；代码已做开头标记清洗作为兜底 |
 | 答案说"没有检索到相关内容" | 库是空的 | 先在控制台摄取目录，或用 `scripts/e2e.py` 灌入示例语料 |
+| `/agent` 一直调工具不返回 | 工具反复失败或问题本身无解 | 降低 `max_steps`（1–8），并看返回轨迹里每步的 observation |
 | 装依赖报编译错误 | 某个包没有 wheel | 保持 `--only-binary=:all:`，换有 wheel 的替代库 |
 
-## 7. 备份与迁移
+## 9. 备份与迁移
 
 整个知识库就是一个 SQLite 文件：`$STARLIGHT_HOME/starlight.db`。拷贝该文件即完成迁移；换机器后放到同一位置，改嵌入模型维度不一致时系统会自动按原文重建向量索引（原文始终保留，不会丢）。
 
-## 8. 验收清单
+## 10. 验收清单
 
 ```bash
-python -m starlight.selftest     # 期望：通过 6/6
-python -m pytest -q              # 期望：全部通过
+python -m starlight.selftest     # 期望：通过 7/7
+python -m pytest -q              # 期望：55 项全部通过
 python scripts/e2e.py            # 期望：结论=全部通过
+python scripts/eval.py --mode rag  # 期望：门禁=通过
+python scripts/verify_env.py     # 期望：干净环境可一键复现
 ```

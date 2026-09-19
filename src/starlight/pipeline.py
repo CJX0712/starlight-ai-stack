@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
+from .agent import AgentRuntime, AgentTrace
 from .config import Settings, resolve_profile
 from .contracts import Answer, IngestReport, ScoredChunk
 from .embedder import TextEmbedder
@@ -102,6 +103,19 @@ class RAGPipeline:
                 yield "知识库里没有检索到相关内容，请先摄取资料。"
             return [], _empty()
         return ctx, self.generator.stream(query, ctx)
+
+    def build_agent(self, max_steps: int = 4) -> AgentRuntime:
+        """装配一个 Agent 运行时：工具集与引用收集器共用同一份上下文。"""
+        from .tools import build_default_tools
+
+        collected: list[ScoredChunk] = []
+        registry = build_default_tools(self, on_chunks=collected.extend)
+        return AgentRuntime(
+            self.provider, self.profile, registry, max_steps=max_steps, collector=collected
+        )
+
+    def run_agent(self, goal: str, max_steps: int = 4) -> AgentTrace:
+        return self.build_agent(max_steps).run(goal)
 
     def close(self) -> None:
         self.store.close()
