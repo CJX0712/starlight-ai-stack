@@ -1,5 +1,11 @@
 # Starlight AI Stack
 
+<p align="center">
+  <a href="https://github.com/CJX0712/starlight-ai-stack/actions/workflows/ci.yml"><img src="https://github.com/CJX0712/starlight-ai-stack/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/CJX0712/starlight-ai-stack/releases"><img src="https://img.shields.io/github/v/release/CJX0712/starlight-ai-stack?sort=semver" alt="release"></a>
+  <img src="https://img.shields.io/badge/author-%E6%99%A8%E6%98%9F-1f6feb" alt="author">
+</p>
+
 本地优先的检索增强生成（RAG）系统：**摄取 → 混合检索 → 引用生成**，全链路可在单台无 GPU 的 Windows 机器上跑通。
 
 仓库：<https://github.com/CJX0712/starlight-ai-stack>
