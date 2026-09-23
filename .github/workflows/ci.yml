@@ -26,8 +26,8 @@ jobs:
     name: 单元测试（无需模型）
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: 安装依赖（仅预编译 wheel）
@@ -43,8 +43,8 @@ jobs:
       STARLIGHT_PROFILE: ${{ inputs.profile }}
       STARLIGHT_HOME: ${{ github.workspace }}/data/eval
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: 安装 Ollama
@@ -70,7 +70,7 @@ jobs:
         run: python scripts/eval.py --mode rag --json-out eval/report-rag.json
       - name: 上传评测报告
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-report
           path: eval/report-rag.json
