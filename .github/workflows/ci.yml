@@ -31,7 +31,8 @@ jobs:
         with:
           python-version: "3.13"
       - name: 安装依赖（仅预编译 wheel）
-        run: pip install --only-binary=:all: -r requirements.txt
+        run: |
+          pip install --only-binary=:all: -r requirements.txt
       - name: 运行单元测试
         run: python -m pytest -q
 
@@ -65,7 +66,8 @@ jobs:
           esac
           for m in $MODELS; do ollama pull "$m"; done
       - name: 安装依赖
-        run: pip install --only-binary=:all: -r requirements.txt
+        run: |
+          pip install --only-binary=:all: -r requirements.txt
       - name: 运行检索与生成评测
         run: python scripts/eval.py --mode rag --json-out eval/report-rag.json
       - name: 上传评测报告
