@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
+          cache: pip
           python-version: "3.13"
       - name: 安装依赖（仅预编译 wheel）
         run: |
@@ -47,6 +48,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
+          cache: pip
           python-version: "3.13"
       - name: 安装 Ollama
         run: curl -fsSL https://ollama.com/install.sh | sh
