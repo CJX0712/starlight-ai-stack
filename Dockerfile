@@ -4,7 +4,7 @@
 # 设计说明：镜像内只装 Python 依赖与本项目代码，模型服务独立成容器（见 docker-compose.yml）。
 # 依赖安装沿用 --only-binary=:all:，保证基础镜像里没有编译器也能装成功。
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
